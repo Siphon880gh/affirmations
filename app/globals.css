@@ -1,0 +1,159 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../vendor/shadcn-tailwind-4.13.0.css";
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
+:root {
+  --background: #0b0c16;
+  --foreground: #f8f6ef;
+  --card: #151724;
+  --card-foreground: #f8f6ef;
+  --popover: #1c1e2c;
+  --popover-foreground: #f8f6ef;
+  --primary: #b7f34a;
+  --primary-foreground: #10130a;
+  --secondary: #262938;
+  --secondary-foreground: #f8f6ef;
+  --muted: #202230;
+  --muted-foreground: #aaaebc;
+  --accent: #ff6b4a;
+  --accent-foreground: #180805;
+  --destructive: #ff5f68;
+  --border: #303343;
+  --input: #3b3e4d;
+  --ring: #b7f34a;
+  --chart-1: #b7f34a;
+  --chart-2: #6d7cff;
+  --chart-3: #ff6b4a;
+  --chart-4: #45d5c1;
+  --chart-5: #f8d05c;
+  --radius: 1rem;
+  --sidebar: #11131e;
+  --sidebar-foreground: #f8f6ef;
+  --sidebar-primary: #b7f34a;
+  --sidebar-primary-foreground: #10130a;
+  --sidebar-accent: #242735;
+  --sidebar-accent-foreground: #f8f6ef;
+  --sidebar-border: #2d3040;
+  --sidebar-ring: #b7f34a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 3px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --font-sans: "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 76% -12%, rgba(109, 124, 255, 0.18), transparent 34rem),
+    radial-gradient(circle at 7% 98%, rgba(183, 243, 74, 0.08), transparent 28rem),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(183, 243, 74, 0.8);
+  color: #10130a;
+}
+
+@keyframes settle-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes soft-pop {
+  0% { transform: scale(0.98); }
+  55% { transform: scale(1.015); }
+  100% { transform: scale(1); }
+}
+
+.settle-in {
+  animation: settle-in 360ms ease-out both;
+}
+
+.soft-pop {
+  animation: soft-pop 300ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
