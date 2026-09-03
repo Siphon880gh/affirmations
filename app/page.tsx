@@ -10,6 +10,7 @@ import {
   CirclePlus,
   Edit3,
   Headphones,
+  Images,
   Layers3,
   Play,
   RotateCcw,
@@ -17,8 +18,10 @@ import {
   Sparkles,
   Square,
   Volume2,
+  X,
 } from "lucide-react";
 
+import { MoodBoard } from "@/components/mood-board";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,13 +42,19 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { deleteClipsForAffirmations, countClips } from "@/lib/mood-board";
 
 type PracticeMode = "type" | "recall" | "build";
+
+type AffirmationLine = {
+  id: string;
+  text: string;
+};
 
 type AffirmationSet = {
   id: string;
   name: string;
-  affirmations: string[];
+  affirmations: AffirmationLine[];
 };
 
 type Reflection = {
@@ -65,35 +74,39 @@ type WordTile = {
 
 const STORAGE_KEY = "affirmation-lab-state-v1";
 
+function line(setId: string, index: number, text: string): AffirmationLine {
+  return { id: `${setId}-line-${index}`, text };
+}
+
 const DEFAULT_SETS: AffirmationSet[] = [
   {
     id: "self-trust",
     name: "Steady self-trust",
     affirmations: [
-      "I trust myself to meet this moment with calm and clarity.",
-      "I am allowed to take up space and speak with conviction.",
-      "I can learn what I need as I move forward.",
-      "My actions are building a life that feels true to me.",
+      line("self-trust", 0, "I trust myself to meet this moment with calm and clarity."),
+      line("self-trust", 1, "I am allowed to take up space and speak with conviction."),
+      line("self-trust", 2, "I can learn what I need as I move forward."),
+      line("self-trust", 3, "My actions are building a life that feels true to me."),
     ],
   },
   {
     id: "calm-body",
     name: "Calm in my body",
     affirmations: [
-      "I can return to one steady breath at a time.",
-      "My body is allowed to soften when I give it care.",
-      "I notice tension without letting it direct me.",
-      "Rest is part of how I move forward.",
+      line("calm-body", 0, "I can return to one steady breath at a time."),
+      line("calm-body", 1, "My body is allowed to soften when I give it care."),
+      line("calm-body", 2, "I notice tension without letting it direct me."),
+      line("calm-body", 3, "Rest is part of how I move forward."),
     ],
   },
   {
     id: "possibility",
     name: "Open possibility",
     affirmations: [
-      "I am open to outcomes better than the ones I can imagine today.",
-      "Small courageous choices can change my direction.",
-      "I do not need certainty to take the next honest step.",
-      "There is room for a new story to become true.",
+      line("possibility", 0, "I am open to outcomes better than the ones I can imagine today."),
+      line("possibility", 1, "Small courageous choices can change my direction."),
+      line("possibility", 2, "I do not need certainty to take the next honest step."),
+      line("possibility", 3, "There is room for a new story to become true."),
     ],
   },
 ];
@@ -131,6 +144,47 @@ function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function isAffirmationLine(value: unknown): value is AffirmationLine {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    typeof (value as AffirmationLine).id === "string" &&
+    typeof (value as AffirmationLine).text === "string"
+  );
+}
+
+function hydrateSets(value: unknown): AffirmationSet[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const sets: AffirmationSet[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as { id?: unknown; name?: unknown; affirmations?: unknown };
+    const id = typeof raw.id === "string" ? raw.id : makeId("set");
+    const name = typeof raw.name === "string" ? raw.name : "Untitled set";
+    const source = Array.isArray(raw.affirmations) ? raw.affirmations : [];
+    const affirmations = source
+      .map((entry, index) => {
+        if (typeof entry === "string" && entry.trim()) return line(id, index, entry.trim());
+        if (isAffirmationLine(entry) && entry.text.trim()) return entry;
+        return null;
+      })
+      .filter((entry): entry is AffirmationLine => Boolean(entry));
+    if (!affirmations.length) continue;
+    sets.push({ id, name, affirmations });
+  }
+  return sets.length ? sets : null;
+}
+
+function mergeLines(previous: AffirmationLine[], texts: string[]): AffirmationLine[] {
+  const pool = [...previous];
+  return texts.map((text) => {
+    const index = pool.findIndex((entry) => entry.text === text);
+    if (index === -1) return { id: makeId("line"), text };
+    const [match] = pool.splice(index, 1);
+    return match ?? { id: makeId("line"), text };
+  });
+}
+
 export default function Home() {
   const [sets, setSets] = useState<AffirmationSet[]>(DEFAULT_SETS);
   const [activeSetId, setActiveSetId] = useState(DEFAULT_SETS[0].id);
@@ -163,11 +217,15 @@ export default function Home() {
   const [draftSetName, setDraftSetName] = useState("");
   const [draftAffirmations, setDraftAffirmations] = useState("");
   const [draftError, setDraftError] = useState("");
+  const [moodOpen, setMoodOpen] = useState(false);
+  const [clipCount, setClipCount] = useState(0);
 
   const activeSet = sets.find((set) => set.id === activeSetId) ?? sets[0];
   const safeIndex = Math.min(currentIndex, Math.max(activeSet.affirmations.length - 1, 0));
-  const currentAffirmation = activeSet.affirmations[safeIndex] ?? "";
-  const practiceKey = `${activeSet.id}:${safeIndex}`;
+  const currentLine = activeSet.affirmations[safeIndex];
+  const currentAffirmation = currentLine?.text ?? "";
+  const currentAffirmationId = currentLine?.id ?? "";
+  const practiceKey = `${activeSet.id}:${currentAffirmationId || safeIndex}`;
   const currentTokens = useMemo(
     () => currentAffirmation.split(/\s+/).filter(Boolean),
     [currentAffirmation],
@@ -195,9 +253,12 @@ export default function Home() {
           reflections?: Reflection[];
         };
         if (Array.isArray(parsed.sets) && parsed.sets.length > 0) {
-          setSets(parsed.sets);
-          if (parsed.activeSetId && parsed.sets.some((set) => set.id === parsed.activeSetId)) {
-            setActiveSetId(parsed.activeSetId);
+          const hydratedSets = hydrateSets(parsed.sets);
+          if (hydratedSets) {
+            setSets(hydratedSets);
+            if (parsed.activeSetId && hydratedSets.some((set) => set.id === parsed.activeSetId)) {
+              setActiveSetId(parsed.activeSetId);
+            }
           }
         }
         if (typeof parsed.voiceURI === "string") setVoiceURI(parsed.voiceURI);
@@ -247,6 +308,34 @@ export default function Home() {
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentAffirmationId) {
+      setClipCount(0);
+      return;
+    }
+    let cancelled = false;
+    setClipCount(0);
+    void countClips(currentAffirmationId)
+      .then((count) => {
+        if (!cancelled) setClipCount(count);
+      })
+      .catch(() => {
+        if (!cancelled) setClipCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentAffirmationId]);
+
+  useEffect(() => {
+    if (!moodOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMoodOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moodOpen]);
 
   function markComplete() {
     setCompletedKeys((current) =>
@@ -330,7 +419,12 @@ export default function Home() {
         setIsPlaying(false);
         return;
       }
-      const utterance = new SpeechSynthesisUtterance(activeSet.affirmations[index]);
+      const spoken = activeSet.affirmations[index]?.text;
+      if (!spoken) {
+        setIsPlaying(false);
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(spoken);
       applyVoice(utterance);
       utterance.onend = () => speakAt(index + 1);
       utterance.onerror = () => setIsPlaying(false);
@@ -363,14 +457,14 @@ export default function Home() {
   function openEditSet() {
     setEditingSetId(activeSet.id);
     setDraftSetName(activeSet.name);
-    setDraftAffirmations(activeSet.affirmations.join("\n"));
+    setDraftAffirmations(activeSet.affirmations.map((entry) => entry.text).join("\n"));
     setDraftError("");
     setSetDialogOpen(true);
   }
 
   function saveSet() {
     const name = draftSetName.trim();
-    const affirmations = Array.from(
+    const texts = Array.from(
       new Set(
         draftAffirmations
           .split("\n")
@@ -383,20 +477,28 @@ export default function Home() {
       setDraftError("Give this set a name.");
       return;
     }
-    if (!affirmations.length) {
+    if (!texts.length) {
       setDraftError("Add at least one affirmation, one per line.");
       return;
     }
 
     if (editingSetId) {
+      const previous = sets.find((set) => set.id === editingSetId);
+      const affirmations = mergeLines(previous?.affirmations ?? [], texts);
+      const removedIds = (previous?.affirmations ?? [])
+        .filter((entry) => !affirmations.some((line) => line.id === entry.id))
+        .map((entry) => entry.id);
+      if (removedIds.length) void deleteClipsForAffirmations(removedIds);
       setSets((current) =>
-        current.map((set) =>
-          set.id === editingSetId ? { ...set, name, affirmations } : set,
-        ),
+        current.map((set) => (set.id === editingSetId ? { ...set, name, affirmations } : set)),
       );
       setCurrentIndex(0);
     } else {
-      const nextSet = { id: makeId("set"), name, affirmations };
+      const nextSet = {
+        id: makeId("set"),
+        name,
+        affirmations: mergeLines([], texts),
+      };
       setSets((current) => [...current, nextSet]);
       setActiveSetId(nextSet.id);
       setCurrentIndex(0);
@@ -424,8 +526,8 @@ export default function Home() {
     if (!bridge) return;
     setSets((current) =>
       current.map((set) =>
-        set.id === activeSet.id && !set.affirmations.includes(bridge)
-          ? { ...set, affirmations: [...set.affirmations, bridge] }
+        set.id === activeSet.id && !set.affirmations.some((entry) => entry.text === bridge)
+          ? { ...set, affirmations: [...set.affirmations, { id: makeId("line"), text: bridge }] }
           : set,
       ),
     );
@@ -473,7 +575,7 @@ export default function Home() {
       </header>
 
       <main className="mx-auto grid max-w-[1580px] gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[250px_minmax(0,1fr)] lg:px-8 xl:grid-cols-[250px_minmax(0,1fr)_330px]">
-        <aside className="rounded-[1.5rem] border border-white/10 bg-[#11131e]/90 p-3 lg:min-h-[calc(100vh-7.75rem)]">
+        <aside className="order-2 rounded-[1.5rem] border border-white/10 bg-[#11131e]/90 p-3 lg:order-1 lg:min-h-[calc(100vh-7.75rem)]">
           <div className="flex items-center justify-between px-2 py-2">
             <div>
               <p className="text-sm font-semibold">Your sets</p>
@@ -543,8 +645,38 @@ export default function Home() {
           </div>
         </aside>
 
-        <section className="min-w-0">
-          <div className="rounded-[1.75rem] bg-[#f7f4ea] p-4 text-[#14151d] shadow-[0_30px_80px_rgba(0,0,0,0.26)] sm:p-6 lg:p-7">
+        <section className="order-1 min-w-0 lg:order-2">
+          <div className="relative rounded-[1.75rem] bg-[#f7f4ea] p-4 text-[#14151d] shadow-[0_30px_80px_rgba(0,0,0,0.26)] sm:p-6 lg:p-7">
+            {moodOpen ? (
+              <button
+                type="button"
+                onClick={() => setMoodOpen(false)}
+                aria-label="Close mood board"
+                className="absolute top-4 right-4 z-30 grid size-12 place-items-center rounded-full bg-[#14151d] text-[#f7f4ea] shadow-[0_14px_28px_rgba(20,21,29,0.28)] transition hover:bg-black focus-visible:ring-2 focus-visible:ring-[#6d7cff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f4ea] sm:top-5 sm:right-5"
+              >
+                <X className="size-5" />
+              </button>
+            ) : null}
+
+            {moodOpen && currentAffirmationId ? (
+              <div
+                className="absolute inset-0 z-20 flex min-h-0 overflow-hidden rounded-[1.75rem]"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mood-board-title"
+              >
+                <h2 id="mood-board-title" className="sr-only">
+                  Mood board
+                </h2>
+                <MoodBoard
+                  affirmationId={currentAffirmationId}
+                  affirmationText={currentAffirmation}
+                  onClipCountChange={setClipCount}
+                />
+              </div>
+            ) : null}
+
+            <div inert={moodOpen ? true : undefined} className={moodOpen ? "invisible" : undefined}>
             <div className="flex flex-col gap-4 border-b border-black/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#66665f]">
@@ -600,6 +732,24 @@ export default function Home() {
             </div>
 
             <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                className="rounded-full border-black/15 bg-[#14151d] text-[#f7f4ea] shadow-none hover:bg-black hover:text-white"
+                onClick={() => setMoodOpen(true)}
+                aria-label={
+                  clipCount
+                    ? `Open mood board, ${clipCount} pictures`
+                    : "Open mood board"
+                }
+              >
+                <Images />
+                Mood board
+                {clipCount > 0 ? (
+                  <span className="rounded-full bg-[#6d7cff] px-1.5 text-[11px] font-bold text-white">
+                    {clipCount}
+                  </span>
+                ) : null}
+              </Button>
               <Button
                 variant="outline"
                 className="rounded-full border-black/15 bg-transparent text-[#1b1c23] shadow-none hover:bg-black/[0.05]"
@@ -659,24 +809,24 @@ export default function Home() {
               }}
               className="gap-4"
             >
-              <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl bg-[#dedbd1] p-1.5">
+              <TabsList className="grid h-auto! w-full grid-cols-3 overflow-hidden rounded-2xl bg-[#dedbd1] p-1.5">
                 <TabsTrigger
                   value="type"
-                  className="min-h-11 rounded-xl text-[#65655f] data-[state=active]:!bg-[#14151d] data-[state=active]:!text-white"
+                  className="h-full min-h-11 rounded-xl border-transparent! text-[#65655f] data-[state=active]:border-transparent! data-[state=active]:!bg-[#14151d] data-[state=active]:!text-white data-[state=active]:shadow-none"
                 >
                   <Edit3 />
                   Type it
                 </TabsTrigger>
                 <TabsTrigger
                   value="recall"
-                  className="min-h-11 rounded-xl text-[#65655f] data-[state=active]:!bg-[#14151d] data-[state=active]:!text-white"
+                  className="h-full min-h-11 rounded-xl border-transparent! text-[#65655f] data-[state=active]:border-transparent! data-[state=active]:!bg-[#14151d] data-[state=active]:!text-white data-[state=active]:shadow-none"
                 >
                   <BrainCircuit />
                   Recall
                 </TabsTrigger>
                 <TabsTrigger
                   value="build"
-                  className="min-h-11 rounded-xl text-[#65655f] data-[state=active]:!bg-[#14151d] data-[state=active]:!text-white"
+                  className="h-full min-h-11 rounded-xl border-transparent! text-[#65655f] data-[state=active]:border-transparent! data-[state=active]:!bg-[#14151d] data-[state=active]:!text-white data-[state=active]:shadow-none"
                 >
                   <Layers3 />
                   Word game
@@ -863,10 +1013,11 @@ export default function Home() {
                 </div>
               </div>
             </Tabs>
+            </div>
           </div>
         </section>
 
-        <aside className="rounded-[1.5rem] border border-white/10 bg-[#151724]/95 p-5 lg:col-start-2 xl:col-start-3 xl:row-start-1">
+        <aside className="order-3 rounded-[1.5rem] border border-white/10 bg-[#151724]/95 p-5 lg:col-start-2 xl:col-start-3 xl:row-start-1">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-2xl bg-accent text-accent-foreground">
               <Sparkles className="size-5" />
@@ -1000,6 +1151,14 @@ export default function Home() {
           )}
 
           <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#6d7cff]/25 bg-[#6d7cff]/10 p-4">
+            <Images className="mt-0.5 size-4 shrink-0 text-[#8f9aff]" />
+            <p className="text-xs leading-5 text-[#c1c5ec]">
+              If images drill a statement in more effectively than words alone, open the mood board.
+              Look at the pictures, or look at them with the affirmation.
+            </p>
+          </div>
+
+          <div className="mt-3 flex items-start gap-3 rounded-2xl border border-[#6d7cff]/25 bg-[#6d7cff]/10 p-4">
             <Headphones className="mt-0.5 size-4 shrink-0 text-[#8f9aff]" />
             <p className="text-xs leading-5 text-[#c1c5ec]">
               Listening can reinforce familiarity. Typing, recalling, and naming resistance keep you actively involved.

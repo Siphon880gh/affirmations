@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Affirmation Lab",
   description:
-    "Build believable affirmations through typing, recall, word games, reflection, and browser-generated voices.",
+    "Build believable affirmations through typing, recall, word games, reflection, browser voices, and an optional mood board.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

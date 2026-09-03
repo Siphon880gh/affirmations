@@ -1,8 +1,10 @@
 # Affirmation Lab
 
-Practice affirmations by typing, recalling, rebuilding sentences, reflecting, and listening with the browser's speech voices.
+Practice affirmations by typing, recalling, rebuilding sentences, reflecting, listening with the browser's speech voices, and (optionally) looking at a mood board of pictures.
 
-Sets, voice choices, and reflections stay in **this browser** (`localStorage`). There is no server database.
+If images are more effective at drilling in a statement, open the mood board on that line. You can look at the images, or look at the images with the affirmation. Choose a photo, paste one, or drop it onto the board; drag to rearrange; delete what you no longer need.
+
+Sets, voice choices, and reflections stay in **this browser** (`localStorage`). Mood board photos stay in **this browser** (`IndexedDB`). There is no server database.
 
 ## Run locally
 
