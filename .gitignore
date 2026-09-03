@@ -40,3 +40,8 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+/tutorial/node_modules/
+/tutorial/dist/
+/tutorial/.wrangler/
+/tutorial/.sites-runtime/
+/tutorial/.next/
