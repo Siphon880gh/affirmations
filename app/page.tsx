@@ -7,6 +7,7 @@ import {
   AudioLines,
   BrainCircuit,
   Check,
+  ChevronDown,
   CirclePlus,
   Edit3,
   Headphones,
@@ -17,12 +18,13 @@ import {
   Save,
   Sparkles,
   Square,
-  Volume2,
   X,
 } from "lucide-react";
+import { Toaster, toast } from "sonner";
 
 import { MoodBoard } from "@/components/mood-board";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +33,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -45,6 +54,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { deleteClipsForAffirmations, countClips } from "@/lib/mood-board";
 
 type PracticeMode = "type" | "recall" | "build";
+type PlayMode = "one" | "rest";
 
 type AffirmationLine = {
   id: string;
@@ -186,6 +196,22 @@ function mergeLines(previous: AffirmationLine[], texts: string[]): AffirmationLi
 }
 
 const BROWSER_DEFAULT_VOICE = "browser-default";
+const PLAYING_LINE_TOAST = "playing-line";
+
+function showPlayingLineToast(text: string) {
+  toast.custom(
+    () => (
+      <div className="max-w-[min(36rem,calc(100vw-2rem))] rounded-2xl border border-black/10 bg-[#f7f4ea] px-5 py-3 text-center shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+        <p className="font-serif text-base leading-snug text-[#14151d]">{text}</p>
+      </div>
+    ),
+    { id: PLAYING_LINE_TOAST, duration: Infinity },
+  );
+}
+
+function hidePlayingLineToast() {
+  toast.dismiss(PLAYING_LINE_TOAST);
+}
 
 function voiceDropdownLabel(voice: SpeechSynthesisVoice) {
   return `${voice.name} · ${voice.lang}`;
@@ -224,8 +250,12 @@ export default function Home() {
   const [voiceURI, setVoiceURI] = useState(BROWSER_DEFAULT_VOICE);
   const [speechRate, setSpeechRate] = useState(0.92);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playMode, setPlayMode] = useState<PlayMode>("one");
   const stopPlaybackRef = useRef(false);
   const userPickedVoiceRef = useRef(false);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playGenerationRef = useRef(0);
 
   const [rating, setRating] = useState<number | null>(null);
   const [beliefNote, setBeliefNote] = useState("");
@@ -337,6 +367,8 @@ export default function Home() {
 
   useEffect(() => {
     return () => {
+      if (playTimeoutRef.current) window.clearTimeout(playTimeoutRef.current);
+      hidePlayingLineToast();
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     };
   }, []);
@@ -428,48 +460,67 @@ export default function Home() {
     utterance.pitch = 1;
   }
 
-  function speakCurrent() {
-    if (!("speechSynthesis" in window) || !currentAffirmation) return;
+  function stopAudio() {
+    playGenerationRef.current += 1;
     stopPlaybackRef.current = true;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(currentAffirmation);
-    applyVoice(utterance);
-    setIsPlaying(true);
-    utterance.onend = () => setIsPlaying(false);
-    utterance.onerror = () => setIsPlaying(false);
-    window.speechSynthesis.speak(utterance);
+    if (playTimeoutRef.current) window.clearTimeout(playTimeoutRef.current);
+    utteranceRef.current = null;
+    hidePlayingLineToast();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    setIsPlaying(false);
   }
 
-  function playSet() {
+  function playAffirmations(mode: PlayMode) {
     if (!("speechSynthesis" in window) || !activeSet.affirmations.length) return;
-    window.speechSynthesis.cancel();
+    const texts = (
+      mode === "rest"
+        ? activeSet.affirmations.slice(safeIndex)
+        : activeSet.affirmations.slice(safeIndex, safeIndex + 1)
+    )
+      .map((line) => line.text)
+      .filter(Boolean);
+    if (!texts.length) return;
+
+    const generation = playGenerationRef.current + 1;
+    playGenerationRef.current = generation;
+    if (playTimeoutRef.current) window.clearTimeout(playTimeoutRef.current);
     stopPlaybackRef.current = false;
+    window.speechSynthesis.cancel();
     setIsPlaying(true);
 
-    const speakAt = (index: number) => {
-      if (stopPlaybackRef.current || index >= activeSet.affirmations.length) {
+    let index = 0;
+    const speakNext = () => {
+      if (playGenerationRef.current !== generation || stopPlaybackRef.current) return;
+      if (index >= texts.length) {
+        hidePlayingLineToast();
         setIsPlaying(false);
         return;
       }
-      const spoken = activeSet.affirmations[index]?.text;
-      if (!spoken) {
-        setIsPlaying(false);
-        return;
-      }
-      const utterance = new SpeechSynthesisUtterance(spoken);
+      const line = texts[index] ?? "";
+      if (mode === "rest") showPlayingLineToast(line);
+      const utterance = new SpeechSynthesisUtterance(line);
       applyVoice(utterance);
-      utterance.onend = () => speakAt(index + 1);
-      utterance.onerror = () => setIsPlaying(false);
+      utteranceRef.current = utterance;
+      utterance.onend = () => {
+        if (playGenerationRef.current !== generation || stopPlaybackRef.current) return;
+        index += 1;
+        if (index >= texts.length) {
+          hidePlayingLineToast();
+          setIsPlaying(false);
+          return;
+        }
+        playTimeoutRef.current = window.setTimeout(speakNext, 280);
+      };
+      utterance.onerror = (event) => {
+        if (playGenerationRef.current !== generation) return;
+        if (event.error === "interrupted" || event.error === "canceled") return;
+        hidePlayingLineToast();
+        setIsPlaying(false);
+      };
       window.speechSynthesis.speak(utterance);
     };
 
-    speakAt(safeIndex);
-  }
-
-  function stopAudio() {
-    stopPlaybackRef.current = true;
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    setIsPlaying(false);
+    playTimeoutRef.current = window.setTimeout(speakNext, 40);
   }
 
   function chooseSet(id: string) {
@@ -782,22 +833,41 @@ export default function Home() {
                   </span>
                 ) : null}
               </Button>
-              <Button
-                variant="outline"
-                className="rounded-full border-black/15 bg-transparent text-[#1b1c23] shadow-none hover:bg-black/[0.05]"
-                onClick={speakCurrent}
-              >
-                <Volume2 />
-                Hear this one
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-full border-black/15 bg-transparent text-[#1b1c23] shadow-none hover:bg-black/[0.05]"
-                onClick={isPlaying ? stopAudio : playSet}
-              >
-                {isPlaying ? <Square /> : <Play />}
-                {isPlaying ? "Stop" : "Play from here"}
-              </Button>
+              <ButtonGroup className="overflow-hidden rounded-full border border-black/15">
+                <Button
+                  variant="outline"
+                  className="rounded-none border-0 bg-transparent text-[#1b1c23] shadow-none hover:bg-black/[0.05]"
+                  onClick={isPlaying ? stopAudio : () => playAffirmations(playMode)}
+                >
+                  {isPlaying ? <Square /> : <Play />}
+                  {isPlaying ? "Stop" : playMode === "rest" ? "Play from here" : "Hear this one"}
+                </Button>
+                <ButtonGroupSeparator className="bg-black/15" />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="rounded-none border-0 bg-transparent text-[#1b1c23] shadow-none hover:bg-black/[0.05]"
+                      aria-label="Choose how to play"
+                      aria-haspopup="menu"
+                    >
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[16rem]">
+                    <DropdownMenuRadioGroup
+                      value={playMode}
+                      onValueChange={(value) => setPlayMode(value === "rest" ? "rest" : "one")}
+                    >
+                      <DropdownMenuRadioItem value="one">This affirmation</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="rest">
+                        From here through the set
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </ButtonGroup>
               <Select
                 value={voiceURI}
                 onValueChange={(value) => {
@@ -1265,6 +1335,7 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Toaster position="bottom-center" visibleToasts={1} offset={24} toastOptions={{ unstyled: true }} />
     </div>
   );
 }
