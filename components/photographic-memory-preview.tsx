@@ -52,6 +52,7 @@ export function PhotographicMemoryPreview({
   const holdingRef = useRef(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const figureRef = useRef<HTMLElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [photoSize, setPhotoSize] = useState({ width: 0, height: 0 });
   const seenClipIdRef = useRef(clip?.id);
@@ -90,6 +91,23 @@ export function PhotographicMemoryPreview({
     measurePhoto();
     return () => observer.disconnect();
   }, [clip?.id, measurePhoto]);
+
+  useEffect(() => {
+    const node = figureRef.current;
+    if (!node || mode !== "review") return;
+
+    function onWheel(event: WheelEvent) {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      setRadiusPercent((current) => {
+        const next = current + (event.deltaY < 0 ? 1 : -1);
+        return Math.min(SPOTLIGHT_RADIUS_MAX, Math.max(SPOTLIGHT_RADIUS_MIN, next));
+      });
+    }
+
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, [clip?.id, mode]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -180,7 +198,7 @@ export function PhotographicMemoryPreview({
             <p className="mt-1 text-sm leading-6 text-[#5f5c52]">
               {mode === "piece"
                 ? "Cycle pieces of the photo, including the whole picture and none of it."
-                : "Move over the photo to review a circle of it. Hold to see the whole picture."}
+                : "Move over the photo to review a circle of it. Scroll to change the radius. Hold to see the whole picture."}
             </p>
           </div>
         </div>
@@ -229,6 +247,7 @@ export function PhotographicMemoryPreview({
         <div ref={stageRef} className="relative min-h-0 min-w-0 flex-1">
           <div className="absolute inset-0 flex items-center justify-center">
             <figure
+              ref={figureRef}
               className={cn(
                 "relative overflow-hidden bg-[#14151d]",
                 mode === "piece" ? "cursor-pointer" : "cursor-crosshair touch-none select-none",

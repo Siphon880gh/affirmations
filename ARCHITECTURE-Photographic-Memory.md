@@ -6,7 +6,7 @@ How the photographic memory tools work once the image preview modal is open. Sto
 
 | File | Role |
 | --- | --- |
-| `components/photographic-memory-preview.tsx` | Preview modal UI and pointer/keyboard handling |
+| `components/photographic-memory-preview.tsx` | Preview modal UI and pointer/keyboard/wheel handling |
 | `lib/photographic-memory.ts` | Piece phases, clip-path, spotlight mask, wrap index, contained photo size |
 
 `MoodBoard` passes the current line’s clips, the active clip index, and the affirmation text. The preview reports index changes and close. It is a nested full-bleed layer (`absolute inset-0 z-40`) with `role="dialog"`.
@@ -55,7 +55,7 @@ The photo stays covered except a circular window, unless the user is holding.
 
 **Spotlight** — Pointer coordinates are stored in image space (clamped to the img box). `spotlightMaskImage` builds a `radial-gradient` used as `-webkit-mask-image` / `mask-image`. No pointer means a fully transparent mask (nothing visible). Leaving the figure while not holding clears the pointer.
 
-**Radius** — Slider only in this mode. Percent of `min(width, height)` of the measured photo. Range `SPOTLIGHT_RADIUS_MIN` (8) to `SPOTLIGHT_RADIUS_MAX` (48); default `SPOTLIGHT_RADIUS_DEFAULT` (18). `spotlightRadiusPx` converts percent to pixels.
+**Radius** — Percent of `min(width, height)` of the measured photo. Range `SPOTLIGHT_RADIUS_MIN` (8) to `SPOTLIGHT_RADIUS_MAX` (48); default `SPOTLIGHT_RADIUS_DEFAULT` (18). `spotlightRadiusPx` converts percent to pixels. The slider in this mode and a wheel listener on the picture both change the same `radiusPercent`. Wheel or trackpad over the picture (not the letterbox around it) nudges one percent per `deltaY` event: scroll up grows the circle, scroll down shrinks it, clamped to min/max. The listener is `{ passive: false }` so `preventDefault` stops the page from scrolling. Wheel still applies while holding; the new radius shows on the slider immediately and on the spotlight when hold ends.
 
 **Hold to see the whole picture** — Pointer down (left mouse button, or tap) on the photo sets hold, captures the pointer, and shows the unmasked image. Pointer up or cancel clears hold. On up, the pointer is updated so the small-radius spotlight returns at the release point. Context menu on the photo is prevented so a long press does not steal the hold.
 
