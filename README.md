@@ -24,10 +24,18 @@ Then open the URL Next.js prints (usually `http://localhost:3000`).
 ## Scripts
 
 - `npm run dev` — Next.js development server
-- `npm run build` — production build
-- `npm run start` — serve the production build
+- `npm run build` — production build; writes a static site to `out/`
 - `npm run lint` — ESLint
+
+## Static `out/` folder
+
+`next.config.ts` sets `output: "export"`. After `npm run build`, the site in `out/` uses a host-dependent base path:
+
+- URL contains `localhost` → `/weng/app/sp/affirmations/out/`
+- otherwise → `/app/sp/affirmations/out/`
+
+Serve the project so those paths map to `out/` (not `file://`). A repo-root `index.html` redirects to `out/`.
 
 ## Deploy (Vercel and similar)
 
-This is a standard Next.js App Router app. On Vercel, import the repo and use the Next.js preset (`next build`, output `.next`). No Wrangler, D1, or vinext settings are required.
+This is a static export. Host the `out/` directory, or import the repo on Vercel with the Next.js preset (`next build`). No Wrangler, D1, or vinext settings are required.

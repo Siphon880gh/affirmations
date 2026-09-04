@@ -17,7 +17,7 @@ Affirmation Lab is a single-page practice tool. You keep sets of affirmation lin
 | Components | shadcn/ui (New York), Base UI / Radix, Lucide icons |
 | Persistence | `localStorage` (JSON state) and IndexedDB (photo blobs) |
 | Speech | Web Speech API (`window.speechSynthesis`) |
-| Deploy | Standard Next.js build (`.next`). No Wrangler, D1, or remote image host. |
+| Deploy | Static export (`output: "export"`) to `out/`. Base path is `/weng/app/sp/affirmations/out` when the page URL contains `localhost`, otherwise `/app/sp/affirmations/out`. |
 
 The app is almost entirely a client component. `app/layout.tsx` is a server layout (metadata, `html`/`body`). `app/page.tsx` is `"use client"` and holds practice state.
 
@@ -35,7 +35,10 @@ components/
 lib/
   mood-board.ts                       # IndexedDB + image compression
   photographic-memory.ts              # piece cycle + spotlight helpers
+  static-base-path.ts                 # localhost vs deploy prefix for out/
   utils.ts                            # className helper
+scripts/
+  apply-base-path.mjs                 # post-build rewrite of the out/ prefix
 ```
 
 There is one route: `/`.
