@@ -185,6 +185,27 @@ function mergeLines(previous: AffirmationLine[], texts: string[]): AffirmationLi
   });
 }
 
+const BROWSER_DEFAULT_VOICE = "browser-default";
+
+function voiceDropdownLabel(voice: SpeechSynthesisVoice) {
+  return `${voice.name} · ${voice.lang}`;
+}
+
+function alphabetizedVoices(voices: SpeechSynthesisVoice[]) {
+  return [...voices].sort((a, b) =>
+    voiceDropdownLabel(a).localeCompare(voiceDropdownLabel(b), undefined, { sensitivity: "base" }),
+  );
+}
+
+function googleUSVoiceURI(voices: SpeechSynthesisVoice[]) {
+  return (
+    voices.find((voice) => {
+      const label = voiceDropdownLabel(voice);
+      return label.includes("Google") && label.includes("en-US");
+    })?.voiceURI ?? null
+  );
+}
+
 export default function Home() {
   const [sets, setSets] = useState<AffirmationSet[]>(DEFAULT_SETS);
   const [activeSetId, setActiveSetId] = useState(DEFAULT_SETS[0].id);
@@ -200,10 +221,11 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
 
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [voiceURI, setVoiceURI] = useState("browser-default");
+  const [voiceURI, setVoiceURI] = useState(BROWSER_DEFAULT_VOICE);
   const [speechRate, setSpeechRate] = useState(0.92);
   const [isPlaying, setIsPlaying] = useState(false);
   const stopPlaybackRef = useRef(false);
+  const userPickedVoiceRef = useRef(false);
 
   const [rating, setRating] = useState<number | null>(null);
   const [beliefNote, setBeliefNote] = useState("");
@@ -261,7 +283,10 @@ export default function Home() {
             }
           }
         }
-        if (typeof parsed.voiceURI === "string") setVoiceURI(parsed.voiceURI);
+        if (typeof parsed.voiceURI === "string") {
+          setVoiceURI(parsed.voiceURI);
+          if (parsed.voiceURI !== BROWSER_DEFAULT_VOICE) userPickedVoiceRef.current = true;
+        }
         if (typeof parsed.speechRate === "number") setSpeechRate(parsed.speechRate);
         if (Array.isArray(parsed.reflections)) setReflections(parsed.reflections);
       }
@@ -287,6 +312,13 @@ export default function Home() {
     window.speechSynthesis.addEventListener("voiceschanged", syncVoices);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", syncVoices);
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || userPickedVoiceRef.current || voices.length === 0) return;
+    if (voiceURI !== BROWSER_DEFAULT_VOICE) return;
+    const preferred = googleUSVoiceURI(voices);
+    if (preferred) setVoiceURI(preferred);
+  }, [hydrated, voices, voiceURI]);
 
   useEffect(() => {
     const wordTiles = currentTokens.map((word, id) => ({ id, word }));
@@ -766,7 +798,13 @@ export default function Home() {
                 {isPlaying ? <Square /> : <Play />}
                 {isPlaying ? "Stop" : "Play from here"}
               </Button>
-              <Select value={voiceURI} onValueChange={setVoiceURI}>
+              <Select
+                value={voiceURI}
+                onValueChange={(value) => {
+                  userPickedVoiceRef.current = true;
+                  setVoiceURI(value);
+                }}
+              >
                 <SelectTrigger
                   className="h-9 max-w-[13rem] rounded-full border-black/15 bg-transparent text-[#1b1c23] shadow-none"
                   aria-label="Choose a browser voice"
@@ -775,10 +813,10 @@ export default function Home() {
                   <SelectValue placeholder="Browser voice" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="browser-default">Browser default</SelectItem>
-                  {voices.map((voice, index) => (
+                  <SelectItem value={BROWSER_DEFAULT_VOICE}>Browser default</SelectItem>
+                  {alphabetizedVoices(voices).map((voice, index) => (
                     <SelectItem key={`${voice.voiceURI}-${index}`} value={voice.voiceURI}>
-                      {voice.name} · {voice.lang}
+                      {voiceDropdownLabel(voice)}
                     </SelectItem>
                   ))}
                 </SelectContent>
