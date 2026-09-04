@@ -6,6 +6,12 @@ If images are more effective at drilling in a statement, open the mood board on 
 
 Sets, voice choices, and reflections stay in **this browser** (`localStorage`). Mood board photos stay in **this browser** (`IndexedDB`). There is no server database.
 
+![Practice screen](docs/screenshots/practice.png)
+
+![Word game](docs/screenshots/word-game.png)
+
+![Mood board](docs/screenshots/mood-board.png)
+
 ## Run locally
 
 ```bash
