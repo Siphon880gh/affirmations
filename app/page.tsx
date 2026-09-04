@@ -254,7 +254,7 @@ export default function Home() {
   const stopPlaybackRef = useRef(false);
   const userPickedVoiceRef = useRef(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playTimeoutRef = useRef<number | null>(null);
   const playGenerationRef = useRef(0);
 
   const [rating, setRating] = useState<number | null>(null);
