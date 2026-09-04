@@ -2,7 +2,7 @@
 
 Practice affirmations by typing, recalling, rebuilding sentences, reflecting, listening with the browser's speech voices, and (optionally) looking at a mood board of pictures.
 
-If images are more effective at drilling in a statement, open the mood board on that line. You can look at the images, or look at the images with the affirmation. Choose a photo, paste one, or drop it onto the board; drag to rearrange; delete what you no longer need.
+If images are more effective at drilling in a statement, open the mood board on that line. You can look at the images, or look at the images with the affirmation. Choose a photo, paste one, or drop it onto the board; drag to rearrange; delete what you no longer need. Click a photo to open a preview with photographic memory tools: cycle the picture piece by piece (full, each quadrant, or none), or review it through a circle that follows the pointer (hold to see the whole picture).
 
 Sets, voice choices, and reflections stay in **this browser** (`localStorage`). Mood board photos stay in **this browser** (`IndexedDB`). There is no server database.
 

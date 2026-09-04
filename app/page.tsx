@@ -1154,6 +1154,7 @@ export default function Home() {
             <Images className="mt-0.5 size-4 shrink-0 text-[#8f9aff]" />
             <p className="text-xs leading-5 text-[#c1c5ec]">
               If images drill a statement in more effectively than words alone, open the mood board.
+              Click a photo to study it piece by piece or with a moving circle.
               Look at the pictures, or look at them with the affirmation.
             </p>
           </div>

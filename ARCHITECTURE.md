@@ -29,11 +29,13 @@ app/
   page.tsx            # all practice UI and JSON state
   globals.css         # Tailwind + theme tokens
 components/
-  mood-board.tsx      # photo board UI
-  ui/                 # shadcn primitives
+  mood-board.tsx                      # photo board UI
+  photographic-memory-preview.tsx     # click-to-preview memory tools
+  ui/                                 # shadcn primitives
 lib/
-  mood-board.ts       # IndexedDB + image compression
-  utils.ts            # className helper
+  mood-board.ts                       # IndexedDB + image compression
+  photographic-memory.ts              # piece cycle + spotlight helpers
+  utils.ts                            # className helper
 ```
 
 There is one route: `/`.
@@ -107,6 +109,14 @@ Cap: **8** clips per line (`MAX_MOOD_CLIPS`).
 `recordsToClips` builds a session `url` with `URL.createObjectURL(blob)`. Those object URLs are not persisted. They are revoked when the board unmounts, the line changes, or a clip is removed.
 
 Reorder updates `order` in place. Delete removes the record and reindexes siblings.
+
+Clicking a thumbnail (without dragging) opens a nested photographic memory preview on top of the board. Escape closes the preview first, then the board. The preview does not write to IndexedDB. Piece phase, review radius, and mode stay in component state for that preview session.
+
+**Piece by piece** shows one of: the full photo, top left, top right, bottom left, bottom right, or none, in that cycle.
+
+**Mouse reviewing** covers the photo except a circular window that follows the pointer. Radius is a slider.
+
+Chevrons and arrow keys move between photos on the same line. The affirmation text stays visible in the preview.
 
 ### What clearing site data does
 

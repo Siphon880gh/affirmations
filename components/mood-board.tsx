@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Images, Plus, X } from "lucide-react";
 
+import { PhotographicMemoryPreview } from "@/components/photographic-memory-preview";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -17,6 +18,7 @@ import {
   revokeClipUrls,
   type MoodClip,
 } from "@/lib/mood-board";
+import { movedPastThreshold } from "@/lib/photographic-memory";
 
 type MoodView = "images" | "with-words";
 
@@ -49,14 +51,34 @@ export function MoodBoard({ affirmationId, affirmationText, onClipCountChange }:
   const [loaded, setLoaded] = useState(false);
   const [fileOver, setFileOver] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const clipsRef = useRef<MoodClip[]>([]);
   const dragFromRef = useRef<number | null>(null);
   const dragOverRef = useRef<number | null>(null);
+  const pendingPointerRef = useRef<{
+    index: number;
+    x: number;
+    y: number;
+    dragged: boolean;
+  } | null>(null);
 
   useEffect(() => {
     clipsRef.current = clips;
   }, [clips]);
+
+  useEffect(() => {
+    setPreviewIndex(null);
+  }, [affirmationId]);
+
+  useEffect(() => {
+    if (previewIndex === null) return;
+    if (clips.length === 0) {
+      setPreviewIndex(null);
+      return;
+    }
+    if (previewIndex >= clips.length) setPreviewIndex(clips.length - 1);
+  }, [clips.length, previewIndex]);
 
   const syncCount = useCallback(
     async (nextClips?: MoodClip[]) => {
@@ -180,13 +202,24 @@ export function MoodBoard({ affirmationId, affirmationText, onClipCountChange }:
     } catch {
       // Synthetic or stale pointer ids cannot capture; drag still works via move/up.
     }
+    pendingPointerRef.current = {
+      index,
+      x: event.clientX,
+      y: event.clientY,
+      dragged: false,
+    };
     dragFromRef.current = index;
     dragOverRef.current = index;
-    setDraggingId(clips[index]?.id ?? null);
   }
 
   function onClipPointerMove(event: React.PointerEvent<HTMLElement>) {
-    if (dragFromRef.current === null) return;
+    const pending = pendingPointerRef.current;
+    if (!pending || dragFromRef.current === null) return;
+    if (!pending.dragged) {
+      if (!movedPastThreshold(event.clientX - pending.x, event.clientY - pending.y)) return;
+      pending.dragged = true;
+      setDraggingId(clipsRef.current[pending.index]?.id ?? null);
+    }
     const node = document.elementFromPoint(event.clientX, event.clientY);
     const host = node?.closest("[data-clip-index]");
     if (!host) return;
@@ -199,17 +232,24 @@ export function MoodBoard({ affirmationId, affirmationText, onClipCountChange }:
   }
 
   function onClipPointerUp() {
+    const pending = pendingPointerRef.current;
+    pendingPointerRef.current = null;
     if (dragFromRef.current === null) return;
+    const openedFrom = dragFromRef.current;
     dragFromRef.current = null;
     dragOverRef.current = null;
     setDraggingId(null);
-    persistOrder(clipsRef.current);
+    if (pending?.dragged) {
+      persistOrder(clipsRef.current);
+      return;
+    }
+    setPreviewIndex(openedFrom);
   }
 
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 flex-1 flex-col rounded-[1.75rem] px-4 py-4 text-[#14151d] sm:px-6 sm:py-5",
+        "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] px-4 py-4 text-[#14151d] sm:px-6 sm:py-5",
         "bg-[radial-gradient(circle_at_18%_10%,rgba(255,255,255,0.55),transparent_22rem),repeating-linear-gradient(-22deg,rgba(20,21,29,0.035)_0_1px,transparent_1px_12px),#efe6d0]",
       )}
       onDragEnter={(event) => {
@@ -338,7 +378,7 @@ export function MoodBoard({ affirmationId, affirmationText, onClipCountChange }:
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={clip.url}
-                    alt=""
+                    alt={`Picture ${index + 1}`}
                     draggable={false}
                     className="aspect-square w-full rounded-[0.35rem] object-cover"
                   />
@@ -362,12 +402,23 @@ export function MoodBoard({ affirmationId, affirmationText, onClipCountChange }:
       </div>
 
       <p className="mt-3 text-xs text-[#6d6a60]">
-        {clips.length}/{MAX_MOOD_CLIPS} pictures · drag to rearrange · stays on this device
+        {clips.length}/{MAX_MOOD_CLIPS} pictures · click to study · drag to rearrange · stays on this
+        device
       </p>
       {error ? (
         <p className="mt-1 text-sm font-medium text-[#9a2f1c]" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {previewIndex !== null && clips[previewIndex] ? (
+        <PhotographicMemoryPreview
+          clips={clips}
+          index={previewIndex}
+          affirmationText={affirmationText}
+          onIndexChange={setPreviewIndex}
+          onClose={() => setPreviewIndex(null)}
+        />
       ) : null}
     </div>
   );
